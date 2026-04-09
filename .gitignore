@@ -1,0 +1,4 @@
+/target
+.env
+.resume-info.json
+.guild_config.csv

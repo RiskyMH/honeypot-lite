@@ -1,0 +1,30 @@
+[package]
+name = "honeypot-lite"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+dashmap = "6"
+rustls = "0.23"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["fs", "macros", "rt", "signal"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+twilight-gateway = "0.17"
+twilight-http = "0.17"
+twilight-model = "0.17"
+twilight-util = { version = "0.17", features = ["builder"] }
+
+
+[profile.release]
+# 1. MAXIMIZE SPEED
+opt-level = 3          # Maximum runtime optimizations (vectorization, loop unrolling)
+lto = "fat"            # Full Link-Time Optimization; better cross-crate analysis
+codegen-units = 1      # Single unit of code generation for better whole-program optimization
+
+# 2. MINIMIZE SIZE (Post-Speed Optimizations)
+panic = "abort"        # Removes unwinding metadata; also slightly boosts speed
+strip = true           # Removes symbols and debuginfo from the final binary

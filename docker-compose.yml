@@ -1,0 +1,21 @@
+services:
+   honeypot-lite:
+     image: ghcr.io/riskymh/honeypot-lite:latest
+     build: .
+     restart: unless-stopped
+     init: true
+     environment:
+       CONFIG_FILE_PATH: ${CONFIG_FILE_PATH:-/data/guild_config.csv}
+       DISCORD_TOKEN: ${DISCORD_TOKEN:?REQUIRED}
+       FORCE_COLOR: 1
+     volumes:
+        - data:/data
+     deploy:
+       resources:
+         limits:
+           memory: 64M
+         reservations:
+           memory: 12M
+
+volumes:
+  data:
