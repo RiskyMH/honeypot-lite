@@ -47,7 +47,7 @@ pub type GuildConfigMap = HashMap<u64, GuildConfigBody>;
 
 pub fn load_guild_config(file: &str) -> GuildConfigMap {
     let mut guild_config = GuildConfigMap::new();
-    
+
     if let Ok(contents) = std::fs::read_to_string(file) {
         for line in contents.lines() {
             let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();

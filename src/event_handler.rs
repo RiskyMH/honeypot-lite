@@ -147,6 +147,18 @@ pub async fn event_handler(event: Event, _state: ()) {
                         .await;
                     if let Err(error) = res {
                         tracing::warn!("failed to ban user: {:?}", error);
+                        // let server know in that channel that we failed to ban them
+                        let res = CTX.http.create_message(message.channel_id)
+                            .content(&format!("User <@{}> triggered the honeypot but I failed to ban them, please check my permissions and try again.", message.author.id))
+                            .allowed_mentions(None)
+                            .await;
+                        if let Err(error) = res {
+                            tracing::warn!(
+                                "failed to create error message (due to ban fail): {:?}",
+                                error
+                            );
+                        }
+                        return;
                     }
                 }
                 ActionType::Softban => {
@@ -158,6 +170,17 @@ pub async fn event_handler(event: Event, _state: ()) {
                         .await;
                     if let Err(error) = res {
                         tracing::warn!("failed to softban user: {:?}", error);
+                        // let server know in that channel that we failed to ban them
+                        let res = CTX.http.create_message(message.channel_id)
+                            .content(&format!("User <@{}> triggered the honeypot but I failed to softban them, please check my permissions and try again.", message.author.id))
+                            .allowed_mentions(None)
+                            .await;
+                        if let Err(error) = res {
+                            tracing::warn!(
+                                "failed to create error message (due to softban fail): {:?}",
+                                error
+                            );
+                        }
                         return;
                     }
 
