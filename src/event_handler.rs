@@ -12,6 +12,7 @@ use twilight_model::{
     channel::ChannelType,
     guild::Permissions,
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
+    id::Id,
 };
 use twilight_util::builder::command::{ChannelBuilder, CommandBuilder, StringBuilder};
 
@@ -58,6 +59,18 @@ pub async fn event_handler(event: Event, _state: ()) {
                 } else {
                     unreachable!();
                 };
+                let log_channel_id = if let Some(CommandDataOption {
+                    value: CommandOptionValue::Channel(log_channel_id),
+                    ..
+                }) = data
+                    .options
+                    .iter()
+                    .find(|option| option.name == "log_channel")
+                {
+                    Some(*log_channel_id)
+                } else {
+                    None
+                };
 
                 let action_type = action.parse::<ActionType>().unwrap_or(ActionType::Ban);
                 {
@@ -68,7 +81,8 @@ pub async fn event_handler(event: Event, _state: ()) {
                         guild_config.insert(
                             guild_id,
                             GuildConfigBody {
-                                channel: channel_id.into(),
+                                honeypot_channel: channel_id.into(),
+                                log_channel: log_channel_id.map(|c| c.into()),
                                 action_type,
                             },
                         );
@@ -76,10 +90,27 @@ pub async fn event_handler(event: Event, _state: ()) {
                     save_guild_config(&CTX.guild_config_file_path, &guild_config.clone()).unwrap();
                 }
 
+                let response_content = if action_type == ActionType::Disabled {
+                    Some(
+                        "Honeypot configuration updated: Disabled honeypot for this server.".into(),
+                    )
+                } else {
+                    Some(format!(
+                        "Honeypot configuration updated: Will **{}** anyone who types in <#{}> {}.",
+                        action_type.to_string(),
+                        channel_id,
+                        if let Some(log_channel_id) = log_channel_id {
+                            format!("and log actions to <#{}>", log_channel_id)
+                        } else {
+                            String::from("and won't log actions")
+                        }
+                    ))
+                };
+
                 let response = InteractionResponse {
                     kind: InteractionResponseType::ChannelMessageWithSource,
                     data: Some(InteractionResponseData {
-                        content: Some("Honeypot configuration updated.".to_string()),
+                        content: response_content,
                         ..InteractionResponseData::default()
                     }),
                 };
@@ -94,7 +125,7 @@ pub async fn event_handler(event: Event, _state: ()) {
             let mut guild_config = CTX.guild_config.lock().unwrap();
             let guild_ids_to_remove: Vec<_> = guild_config
                 .iter()
-                .filter(|(_, config)| config.channel == channel.id)
+                .filter(|(_, config)| config.honeypot_channel == channel.id)
                 .map(|(guild_id, _)| *guild_id)
                 .collect();
             for guild_id in guild_ids_to_remove {
@@ -132,11 +163,12 @@ pub async fn event_handler(event: Event, _state: ()) {
                 return;
             };
 
-            if config.channel != channel_id {
+            if config.honeypot_channel != channel_id {
                 return;
             }
 
             const DELETE_MESSAGE_SECONDS: u32 = 3600; // 1hr
+            let mut failed = false;
             match config.action_type {
                 ActionType::Ban => {
                     let res = CTX
@@ -147,18 +179,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                         .await;
                     if let Err(error) = res {
                         tracing::warn!("failed to ban user: {:?}", error);
-                        // let server know in that channel that we failed to ban them
-                        let res = CTX.http.create_message(message.channel_id)
-                            .content(&format!("User <@{}> triggered the honeypot but I failed to ban them, please check my permissions and try again.", message.author.id))
-                            .allowed_mentions(None)
-                            .await;
-                        if let Err(error) = res {
-                            tracing::warn!(
-                                "failed to create error message (due to ban fail): {:?}",
-                                error
-                            );
-                        }
-                        return;
+                        failed = true;
                     }
                 }
                 ActionType::Softban => {
@@ -170,30 +191,75 @@ pub async fn event_handler(event: Event, _state: ()) {
                         .await;
                     if let Err(error) = res {
                         tracing::warn!("failed to softban user: {:?}", error);
-                        // let server know in that channel that we failed to ban them
-                        let res = CTX.http.create_message(message.channel_id)
-                            .content(&format!("User <@{}> triggered the honeypot but I failed to softban them, please check my permissions and try again.", message.author.id))
-                            .allowed_mentions(None)
+                        failed = true;
+                    } else {
+                        let res: Result<
+                            twilight_http::Response<twilight_http::response::marker::EmptyBody>,
+                            twilight_http::Error,
+                        > = CTX
+                            .http
+                            .delete_ban(guild_id, message.author.id)
+                            .reason("User typed in #honeypot channel -> softban (2/2)")
                             .await;
                         if let Err(error) = res {
-                            tracing::warn!(
-                                "failed to create error message (due to softban fail): {:?}",
-                                error
-                            );
+                            tracing::warn!("failed to delete ban for softban: {:?}", error);
                         }
-                        return;
-                    }
-
-                    let res = CTX
-                        .http
-                        .delete_ban(guild_id, message.author.id)
-                        .reason("User typed in #honeypot channel -> softban (2/2)")
-                        .await;
-                    if let Err(error) = res {
-                        tracing::warn!("failed to delete ban for softban: {:?}", error);
                     }
                 }
-                ActionType::Disabled => {}
+                ActionType::Disabled => return,
+            }
+
+            if failed {
+                let action_name = match config.action_type {
+                    ActionType::Ban => "ban",
+                    ActionType::Softban => "softban",
+                    ActionType::Disabled => "do nothing to",
+                };
+
+                let channel_id = if let Some(log_channel) = config.log_channel {
+                    Id::new(log_channel)
+                } else {
+                    message.channel_id
+                };
+
+                let res = CTX.http.create_message(channel_id)
+                    .content(&format!(
+                        "User <@{}> triggered the honeypot but I **failed** to {} them, please check my permissions to ensure I can {} them.",
+                        message.author.id, action_name, action_name
+                    ))
+                    .allowed_mentions(None)
+                    .await;
+                if let Err(error) = res {
+                    tracing::warn!(
+                        "failed to create error message (due to {} fail): {:?}",
+                        action_name,
+                        error
+                    );
+                }
+                return;
+            } else if let Some(log_channel) = config.log_channel {
+                let action_name = match config.action_type {
+                    ActionType::Ban => "banned",
+                    ActionType::Softban => "softbanned",
+                    ActionType::Disabled => "nothinged?",
+                };
+
+                let res = CTX
+                    .http
+                    .create_message(Id::new(log_channel))
+                    .content(&format!(
+                        "User <@{}> was {} for triggering the honeypot in <#{}>",
+                        message.author.id, action_name, channel_id
+                    ))
+                    .allowed_mentions(None)
+                    .await;
+                if let Err(error) = res {
+                    tracing::warn!(
+                        "failed to create log message for {}: {:?}",
+                        action_name,
+                        error
+                    );
+                }
             }
         }
         Event::Ready(ready) => {
@@ -214,7 +280,7 @@ pub fn global_commands() -> Vec<Command> {
     return vec![
         CommandBuilder::new(
             "honeypot-set",
-            "Set/update honeypot channel",
+            "Set/update honeypot channel (note: this overrides previous config set)",
             CommandType::ChatInput,
         )
         .default_member_permissions(
@@ -235,6 +301,18 @@ pub fn global_commands() -> Vec<Command> {
                 ("Ban", "ban"),
                 ("Softban", "softban"),
                 ("Disabled", "disabled"),
+            ]),
+        )
+        .option(
+            ChannelBuilder::new(
+                "log_channel",
+                "The channel to log actions in (if ommited, then it won't log anywhere)",
+            )
+            .required(false)
+            .channel_types([
+                ChannelType::GuildText,
+                ChannelType::PublicThread,
+                ChannelType::PrivateThread,
             ]),
         )
         .build(),
