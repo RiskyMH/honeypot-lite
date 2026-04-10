@@ -73,7 +73,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                 };
 
                 let action_type = action.parse::<ActionType>().unwrap_or(ActionType::Ban);
-                {
+                let guild_config_to_save = {
                     let mut guild_config = CTX.guild_config.lock().unwrap();
                     if action_type == ActionType::Disabled {
                         guild_config.remove(&guild_id);
@@ -87,8 +87,9 @@ pub async fn event_handler(event: Event, _state: ()) {
                             },
                         );
                     }
-                    save_guild_config(&CTX.guild_config_file_path, &guild_config.clone()).unwrap();
-                }
+                    guild_config.clone()
+                };
+                save_guild_config(&CTX.guild_config_file_path, &guild_config_to_save).unwrap();
 
                 let response_content = if action_type == ActionType::Disabled {
                     Some(
@@ -122,25 +123,34 @@ pub async fn event_handler(event: Event, _state: ()) {
             }
         }
         Event::ChannelDelete(channel) => {
-            let mut guild_config = CTX.guild_config.lock().unwrap();
-            let guild_ids_to_remove: Vec<_> = guild_config
-                .iter()
-                .filter(|(_, config)| config.honeypot_channel == channel.id)
-                .map(|(guild_id, _)| *guild_id)
-                .collect();
-            for guild_id in guild_ids_to_remove {
-                guild_config.remove(&guild_id);
-            }
-            save_guild_config(&CTX.guild_config_file_path, &guild_config.clone()).unwrap();
+            let guild_config_to_save = {
+                let mut guild_config = CTX.guild_config.lock().unwrap();
+                let guild_ids_to_remove: Vec<_> = guild_config
+                    .iter()
+                    .filter(|(_, config)| config.honeypot_channel == channel.id)
+                    .map(|(guild_id, _)| *guild_id)
+                    .collect();
+                for guild_id in guild_ids_to_remove {
+                    guild_config.remove(&guild_id);
+                }
+                guild_config.clone()
+            };
+            save_guild_config(&CTX.guild_config_file_path, &guild_config_to_save).unwrap();
         }
         Event::GuildDelete(guild) => {
-            let mut guild_config = CTX.guild_config.lock().unwrap();
-            guild_config.remove(&guild.id.into());
-            save_guild_config(&CTX.guild_config_file_path, &guild_config.clone()).unwrap();
+            let guild_config_to_save = {
+                let mut guild_config = CTX.guild_config.lock().unwrap();
+                guild_config.remove(&guild.id.into());
+                guild_config.clone()
+            };
+            save_guild_config(&CTX.guild_config_file_path, &guild_config_to_save).unwrap();
         }
         Event::MessageCreate(message) => {
             // bot messages dont matter, except for interactions from *other* bots where we count the invoker as msg author
-            if message.author.bot && (message.interaction_metadata.is_none() || message.application_id == Some(CTX.application_id)) {
+            if message.author.bot
+                && (message.interaction_metadata.is_none()
+                    || message.application_id == Some(CTX.application_id))
+            {
                 return;
             }
 
