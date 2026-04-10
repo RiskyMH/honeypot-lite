@@ -12,7 +12,7 @@ use twilight_model::{
     channel::ChannelType,
     guild::Permissions,
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
-    id::Id,
+    id::{Id, marker::UserMarker},
 };
 use twilight_util::builder::command::{ChannelBuilder, CommandBuilder, StringBuilder};
 
@@ -139,7 +139,8 @@ pub async fn event_handler(event: Event, _state: ()) {
             save_guild_config(&CTX.guild_config_file_path, &guild_config.clone()).unwrap();
         }
         Event::MessageCreate(message) => {
-            if message.author.bot {
+            // bot messages dont matter, except for interactions from *other* bots where we count the invoker as msg author
+            if message.author.bot && (message.interaction_metadata.is_none() || message.application_id == Some(CTX.application_id)) {
                 return;
             }
 
@@ -167,13 +168,19 @@ pub async fn event_handler(event: Event, _state: ()) {
                 return;
             }
 
+            let user_id: Id<UserMarker> = message
+                .interaction_metadata
+                .as_ref()
+                .and_then(|m| m.target_user.as_ref().map(|u| u.id))
+                .unwrap_or(message.author.id);
+
             const DELETE_MESSAGE_SECONDS: u32 = 3600; // 1hr
             let mut failed = false;
             match config.action_type {
                 ActionType::Ban => {
                     let res = CTX
                         .http
-                        .create_ban(guild_id, message.author.id)
+                        .create_ban(guild_id, user_id)
                         .delete_message_seconds(DELETE_MESSAGE_SECONDS)
                         .reason("User typed in #honeypot channel -> ban")
                         .await;
@@ -185,7 +192,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                 ActionType::Softban => {
                     let res = CTX
                         .http
-                        .create_ban(guild_id, message.author.id)
+                        .create_ban(guild_id, user_id)
                         .delete_message_seconds(DELETE_MESSAGE_SECONDS)
                         .reason("User typed in #honeypot channel -> softban (1/2)")
                         .await;
@@ -198,7 +205,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                             twilight_http::Error,
                         > = CTX
                             .http
-                            .delete_ban(guild_id, message.author.id)
+                            .delete_ban(guild_id, user_id)
                             .reason("User typed in #honeypot channel -> softban (2/2)")
                             .await;
                         if let Err(error) = res {
@@ -225,7 +232,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                 let res = CTX.http.create_message(channel_id)
                     .content(&format!(
                         "User <@{}> triggered the honeypot but I **failed** to {} them, please check my permissions to ensure I can {} them.",
-                        message.author.id, action_name, action_name
+                        user_id, action_name, action_name
                     ))
                     .allowed_mentions(None)
                     .await;
@@ -249,7 +256,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                     .create_message(Id::new(log_channel))
                     .content(&format!(
                         "User <@{}> was {} for triggering the honeypot in <#{}>",
-                        message.author.id, action_name, channel_id
+                        user_id, action_name, channel_id
                     ))
                     .allowed_mentions(None)
                     .await;
