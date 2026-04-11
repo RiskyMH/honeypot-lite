@@ -13,9 +13,8 @@ pub use self::{
 };
 
 use dashmap::DashMap;
-use std::sync::Mutex;
 use std::{env, time::Duration};
-use tokio::signal;
+use tokio::{signal, sync::RwLock};
 use twilight_gateway::{ConfigBuilder, EventTypeFlags, Intents, queue::InMemoryQueue};
 use twilight_http::Client;
 
@@ -23,7 +22,7 @@ use twilight_http::Client;
 const EVENT_TYPES: EventTypeFlags = EventTypeFlags::empty().union(EventTypeFlags::INTERACTION_CREATE).union(EventTypeFlags::MESSAGE_CREATE).union(EventTypeFlags::CHANNEL_DELETE).union(EventTypeFlags::GUILD_DELETE).union(EventTypeFlags::READY);
 const INTENTS: Intents = Intents::GUILDS.union(Intents::GUILD_MESSAGES);
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -47,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
         app.id,
         http,
         shards,
-        Mutex::new(guild_config),
+        RwLock::new(guild_config),
         config_file_path,
     );
 

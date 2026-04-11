@@ -74,7 +74,7 @@ pub async fn event_handler(event: Event, _state: ()) {
 
                 let action_type = action.parse::<ActionType>().unwrap_or(ActionType::Ban);
                 let guild_config_to_save = {
-                    let mut guild_config = CTX.guild_config.lock().unwrap();
+                    let mut guild_config = CTX.guild_config.write().await;
                     if action_type == ActionType::Disabled {
                         guild_config.remove(&guild_id);
                     } else {
@@ -124,7 +124,7 @@ pub async fn event_handler(event: Event, _state: ()) {
         }
         Event::ChannelDelete(channel) => {
             let guild_config_to_save = {
-                let mut guild_config = CTX.guild_config.lock().unwrap();
+                let mut guild_config = CTX.guild_config.write().await;
                 let guild_ids_to_remove: Vec<_> = guild_config
                     .iter()
                     .filter(|(_, config)| config.honeypot_channel == channel.id)
@@ -139,7 +139,7 @@ pub async fn event_handler(event: Event, _state: ()) {
         }
         Event::GuildDelete(guild) => {
             let guild_config_to_save = {
-                let mut guild_config = CTX.guild_config.lock().unwrap();
+                let mut guild_config = CTX.guild_config.write().await;
                 guild_config.remove(&guild.id.into());
                 guild_config.clone()
             };
@@ -164,7 +164,7 @@ pub async fn event_handler(event: Event, _state: ()) {
             let channel_id = message.channel_id;
 
             let config = {
-                let guild_config = CTX.guild_config.lock().unwrap();
+                let guild_config = CTX.guild_config.read().await;
                 guild_config.get(&guild_id.into()).cloned()
             };
 
