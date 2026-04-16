@@ -5,14 +5,14 @@ use twilight_model::{
     application::{
         command::{Command, CommandType},
         interaction::{
-            InteractionData,
-            application_command::{CommandDataOption, CommandOptionValue},
+            InteractionContextType, InteractionData, application_command::CommandOptionValue,
         },
     },
     channel::ChannelType,
     guild::Permissions,
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
     id::{Id, marker::UserMarker},
+    oauth::ApplicationIntegrationType,
 };
 use twilight_util::builder::command::{ChannelBuilder, CommandBuilder, StringBuilder};
 
@@ -27,50 +27,41 @@ pub async fn event_handler(event: Event, _state: ()) {
             }
             let InteractionData::ApplicationCommand(data) = interaction.data.as_ref().unwrap()
             else {
-                unreachable!();
+                panic!();
             };
             let kind: &str = data.name.as_str();
             let guild_id: u64 = interaction.guild_id.unwrap().into();
 
             if kind == "honeypot-set" {
-                let channel_id = if let CommandDataOption {
-                    value: CommandOptionValue::Channel(channel_id),
-                    ..
-                } = data
+                let channel_opt = data
                     .options
                     .iter()
                     .find(|option| option.name == "channel")
-                    .unwrap()
-                {
-                    *channel_id
-                } else {
-                    unreachable!();
+                    .unwrap();
+
+                let CommandOptionValue::Channel(channel_id) = channel_opt.value else {
+                    panic!();
                 };
-                let action = if let CommandDataOption {
-                    value: CommandOptionValue::String(action),
-                    ..
-                } = data
+
+                let action_opt = data
                     .options
                     .iter()
                     .find(|option| option.name == "type")
-                    .unwrap()
-                {
-                    action.as_str()
-                } else {
-                    unreachable!();
+                    .unwrap();
+
+                let action = match &action_opt.value {
+                    CommandOptionValue::String(action) => action.as_str(),
+                    _ => panic!(),
                 };
-                let log_channel_id = if let Some(CommandDataOption {
-                    value: CommandOptionValue::Channel(log_channel_id),
-                    ..
-                }) = data
+
+                let log_channel_id = data
                     .options
                     .iter()
                     .find(|option| option.name == "log_channel")
-                {
-                    Some(*log_channel_id)
-                } else {
-                    None
-                };
+                    .map(|o| match o.value {
+                        CommandOptionValue::Channel(log) => log,
+                        _ => panic!(),
+                    });
 
                 let action_type = action.parse::<ActionType>().unwrap_or(ActionType::Ban);
                 let guild_config_to_save = {
@@ -181,8 +172,7 @@ pub async fn event_handler(event: Event, _state: ()) {
             let user_id: Id<UserMarker> = message
                 .interaction_metadata
                 .as_ref()
-                .and_then(|m| m.target_user.as_ref().map(|u| u.id))
-                .unwrap_or(message.author.id);
+                .map_or(message.author.id, |m| m.user.id);
 
             const DELETE_MESSAGE_SECONDS: u32 = 3600; // 1hr
             let mut failed = false;
@@ -194,9 +184,12 @@ pub async fn event_handler(event: Event, _state: ()) {
                         .delete_message_seconds(DELETE_MESSAGE_SECONDS)
                         .reason("User typed in #honeypot channel -> ban")
                         .await;
+
                     if let Err(error) = res {
-                        tracing::warn!("failed to ban user: {:?}", error);
-                        failed = true;
+                        tracing::warn!(
+                            "Failed to ban user: {}",
+                            twilight_http_error_string(&error)
+                        );
                     }
                 }
                 ActionType::Softban => {
@@ -207,7 +200,10 @@ pub async fn event_handler(event: Event, _state: ()) {
                         .reason("User typed in #honeypot channel -> softban (1/2)")
                         .await;
                     if let Err(error) = res {
-                        tracing::warn!("failed to softban user: {:?}", error);
+                        tracing::warn!(
+                            "Failed to softban user: {}",
+                            twilight_http_error_string(&error)
+                        );
                         failed = true;
                     } else {
                         let res: Result<
@@ -219,7 +215,10 @@ pub async fn event_handler(event: Event, _state: ()) {
                             .reason("User typed in #honeypot channel -> softban (2/2)")
                             .await;
                         if let Err(error) = res {
-                            tracing::warn!("failed to delete ban for softban: {:?}", error);
+                            tracing::warn!(
+                                "Failed to delete ban for softban: {}",
+                                twilight_http_error_string(&error)
+                            );
                         }
                     }
                 }
@@ -248,9 +247,9 @@ pub async fn event_handler(event: Event, _state: ()) {
                     .await;
                 if let Err(error) = res {
                     tracing::warn!(
-                        "failed to create error message (due to {} fail): {:?}",
+                        "Failed to create error message (due to {} fail): {}",
                         action_name,
-                        error
+                        twilight_http_error_string(&error)
                     );
                 }
                 return;
@@ -272,9 +271,9 @@ pub async fn event_handler(event: Event, _state: ()) {
                     .await;
                 if let Err(error) = res {
                     tracing::warn!(
-                        "failed to create log message for {}: {:?}",
+                        "Failed to create log message for {}: {}",
                         action_name,
-                        error
+                        twilight_http_error_string(&error)
                     );
                 }
             }
@@ -303,6 +302,8 @@ pub fn global_commands() -> Vec<Command> {
         .default_member_permissions(
             Permissions::BAN_MEMBERS | Permissions::MANAGE_GUILD | Permissions::MANAGE_CHANNELS,
         )
+        .integration_types([ApplicationIntegrationType::GuildInstall])
+        .contexts([InteractionContextType::Guild])
         .option(
             ChannelBuilder::new("channel", "The channel to ban people that message in it")
                 .required(true)
@@ -334,4 +335,28 @@ pub fn global_commands() -> Vec<Command> {
         )
         .build(),
     ];
+}
+
+fn twilight_http_error_string(error: &twilight_http::Error) -> String {
+    match error.kind() {
+        twilight_http::error::ErrorType::Response {
+            body,
+            status,
+            error: api_error,
+        } => match &api_error {
+            twilight_http::api_error::ApiError::General(g) => {
+                format!("DiscordApiError[{}]: {}", g.code, g.message)
+            }
+            _ => {
+                format!(
+                    "DiscordApiError[{}]: {}",
+                    status,
+                    String::from_utf8_lossy(body),
+                )
+            }
+        },
+        other => {
+            format!("TwilightHttpError: {:?}", other)
+        }
+    }
 }
