@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1"
 dashmap = "6"
-rustls = "0.23"
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["fs", "macros", "rt", "signal", "rt-multi-thread"] }

@@ -19,9 +19,11 @@ jobs:
           - runner: ubuntu-latest
             platform: linux/amd64
             platform_suffix: x64
+            rust_target_cpu: x86-64-v3
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
             platform_suffix: arm64
+            rust_target_cpu: neoverse-n1
     permissions:
       contents: read
       packages: write
@@ -37,6 +39,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Patch target-cpu in cargo config
+        run: sed -i 's/target-cpu=native/target-cpu=${{ matrix.rust_target_cpu }}/g' .cargo/config.toml
+        if: ${{ matrix.rust_target_cpu != '' }}
 
       - name: Build & push image (per-arch)
         uses: docker/build-push-action@v6
