@@ -8,7 +8,7 @@ use twilight_model::{
             InteractionContextType, InteractionData, application_command::CommandOptionValue,
         },
     },
-    channel::ChannelType,
+    channel::{ChannelType, message::MessageFlags},
     guild::Permissions,
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
     id::{Id, marker::UserMarker},
@@ -64,6 +64,50 @@ pub async fn event_handler(event: Event, _state: ()) {
                     });
 
                 let action_type = action.parse::<ActionType>().unwrap_or(ActionType::Ban);
+
+                #[rustfmt::skip]
+                let _permission_checks = {
+                    let mut errors: Vec<String> = vec![];
+                    macro_rules! check {
+                        ($c:expr, $msg:expr) => { if !$c { errors.push($msg.into()); } };
+                    }
+
+                    let Some(resolved_channels) = data.resolved.as_ref().map(|r| &r.channels) else { return };
+
+                    let (app_permissions, member_permissions) = (
+                        interaction.app_permissions.unwrap_or(Permissions::empty()),
+                        interaction.member.as_ref().and_then(|m| m.permissions).unwrap_or(Permissions::empty()),
+                    );
+                    check!(app_permissions.contains(Permissions::BAN_MEMBERS), "I need the **Ban Members** permission to function.");
+                    check!(member_permissions.contains(Permissions::BAN_MEMBERS), "You need the **Ban Members** permission to use this command.");
+
+                    if let Some(resolved_honeypot) = resolved_channels.get(&channel_id) {
+                        check!(resolved_honeypot.permissions.contains(Permissions::VIEW_CHANNEL), format!("You need **View Channel** permission in <#{channel_id}>."));
+                        check!(resolved_honeypot.app_permissions.unwrap_or(Permissions::empty()).contains(Permissions::VIEW_CHANNEL), format!("I need the **View Channel** permission in <#{channel_id}>."));
+                    } else {
+                        errors.push(format!("Could not resolve channel <#{channel_id}> (honeypot channel)."));
+                    }
+
+                    if let Some(log_id) = log_channel_id {
+                        if let Some(resolved_log) = resolved_channels.get(&log_id) {
+                            check!(resolved_log.permissions.contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES), format!("You need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
+                            check!(resolved_log.app_permissions.unwrap_or(Permissions::empty()).contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES), format!("I need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
+                        }
+                    }
+
+                    if !errors.is_empty() {
+                        let _ = CTX.interaction().create_response(interaction.id, &interaction.token, &InteractionResponse {
+                            kind: InteractionResponseType::ChannelMessageWithSource,
+                            data: Some(InteractionResponseData {
+                                content: Some(format!("Cannot set honeypot:\n- {}\n-# No settings have been changed.", errors.join("\n- "))),
+                                flags: Some(MessageFlags::EPHEMERAL),
+                                ..InteractionResponseData::default()
+                            }),
+                        }).await;
+                        return;
+                    }
+                };
+
                 let guild_config_to_save = {
                     let mut guild_config = CTX.guild_config.write().await;
                     if action_type == ActionType::Disabled {

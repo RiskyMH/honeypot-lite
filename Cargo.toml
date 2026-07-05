@@ -18,6 +18,11 @@ twilight-http = "0.17"
 twilight-model = "0.17"
 twilight-util = { version = "0.17", features = ["builder"] }
 
+# temporary fork so that we can use the resolved channel app_permissions field in interactions
+[patch.crates-io]
+twilight-http = { git = "https://github.com/The-Fiery-Fire/twilight", branch = "The-Fiery-Fire-riskymh/interaction-resolved-channel-app_permissions" }
+twilight-model = { git = "https://github.com/The-Fiery-Fire/twilight", branch = "The-Fiery-Fire-riskymh/interaction-resolved-channel-app_permissions" }
+twilight-util = { git = "https://github.com/The-Fiery-Fire/twilight", branch = "The-Fiery-Fire-riskymh/interaction-resolved-channel-app_permissions" }
 
 [profile.release]
 # 1. MAXIMIZE SPEED
