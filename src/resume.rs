@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 use twilight_gateway::{Config, ConfigBuilder, Session, Shard, ShardId};
 
-const INFO_FILE: &str = ".resume-info.json";
-
 pub trait ConfigBuilderExt {
     fn resume_info(self, resume_info: Info) -> Self;
 }
@@ -44,19 +42,19 @@ impl From<&Shard> for Info {
 }
 
 /// Saves shard resumption information to the file system.
-pub async fn save(info: &[Info]) -> anyhow::Result<()> {
+pub async fn save(info: &[Info], file: &str) -> anyhow::Result<()> {
     if !info.iter().all(Info::is_none) {
         let contents = serde_json::to_vec(&info)?;
-        fs::write(INFO_FILE, contents).await?;
+        fs::write(file, contents).await?;
     }
 
     Ok(())
 }
 
 /// Restores shard resumption information from the file system.
-pub async fn restore(config: Config, shards: u32) -> Vec<Shard> {
+pub async fn restore(config: Config, shards: u32, file: &str) -> Vec<Shard> {
     let info = async {
-        let contents = fs::read(INFO_FILE).await?;
+        let contents = fs::read(file).await?;
         anyhow::Ok(serde_json::from_slice::<Vec<Info>>(&contents)?)
     }
     .await;
@@ -84,7 +82,7 @@ pub async fn restore(config: Config, shards: u32) -> Vec<Shard> {
     };
 
     // Resumed or not, the saved resume info is now stale.
-    _ = fs::remove_file(INFO_FILE).await;
+    _ = fs::remove_file(file).await;
 
     shards
 }

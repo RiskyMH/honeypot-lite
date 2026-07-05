@@ -14,7 +14,7 @@ pub use self::{
 
 use dashmap::DashMap;
 use std::{env, time::Duration};
-use tokio::{signal, sync::RwLock};
+use tokio::{sync::RwLock};
 use twilight_gateway::{ConfigBuilder, EventTypeFlags, Intents, queue::InMemoryQueue};
 use twilight_http::Client;
 
@@ -29,6 +29,8 @@ async fn main() -> anyhow::Result<()> {
     let token = env::var("DISCORD_TOKEN")?;
     let config_file_path =
         env::var("CONFIG_FILE_PATH").unwrap_or_else(|_| ".guild_config.csv".into());
+    let resume_file_path =
+        env::var("RESUME_FILE_PATH").unwrap_or_else(|_| ".resume-info.json".into());
 
     let http = Client::new(token.clone());
     let app = async { anyhow::Ok(http.current_user_application().await?.model().await?) }.await?;
@@ -60,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let config = ConfigBuilder::new(token, INTENTS).queue(queue).build();
 
-    let shards = resume::restore(config, info.shards).await;
+    let shards = resume::restore(config, info.shards, &resume_file_path).await;
 
     let tasks = shards
         .into_iter()
@@ -73,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
-    signal::ctrl_c().await?;
+    shutdown_signal().await;
     tracing::info!("shutting down; press CTRL-C to abort");
 
     let join_all_tasks = async {
@@ -84,12 +86,31 @@ async fn main() -> anyhow::Result<()> {
         anyhow::Ok(resume_info)
     };
     let resume_info = tokio::select! {
-        _ = signal::ctrl_c() => Vec::new(),
+        _ = shutdown_signal() => Vec::new(),
         resume_info = join_all_tasks => resume_info?,
     };
 
     // Save shard information to be restored.
-    resume::save(&resume_info).await?;
+    resume::save(&resume_info, &resume_file_path).await?;
 
     Ok(())
+}
+
+#[cfg(windows)]
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
+}
+
+#[cfg(unix)]
+async fn shutdown_signal() {
+    use tokio::signal::unix::{SignalKind, signal};
+    let mut sigint = signal(SignalKind::interrupt()).expect("failed to install SIGINT handler");
+    let mut sigterm = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+
+    tokio::select! {
+        _ = sigint.recv() => {},
+        _ = sigterm.recv() => {},
+    };
 }

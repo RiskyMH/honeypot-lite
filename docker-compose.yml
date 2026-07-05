@@ -6,6 +6,7 @@ services:
      init: true
      environment:
        CONFIG_FILE_PATH: ${CONFIG_FILE_PATH:-/data/guild_config.csv}
+       RESUME_FILE_PATH: ${RESUME_FILE_PATH:-/data/resume-info.json}
        DISCORD_TOKEN: ${DISCORD_TOKEN:?REQUIRED}
        FORCE_COLOR: 1
      volumes:

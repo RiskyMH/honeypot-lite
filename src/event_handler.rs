@@ -66,32 +66,40 @@ pub async fn event_handler(event: Event, _state: ()) {
                 let action_type = action.parse::<ActionType>().unwrap_or(ActionType::Ban);
 
                 #[rustfmt::skip]
-                let _permission_checks = {
+                let _permission_check = {
                     let mut errors: Vec<String> = vec![];
-                    macro_rules! check {
-                        ($c:expr, $msg:expr) => { if !$c { errors.push($msg.into()); } };
-                    }
 
                     let Some(resolved_channels) = data.resolved.as_ref().map(|r| &r.channels) else { return };
 
-                    let (app_permissions, member_permissions) = (
-                        interaction.app_permissions.unwrap_or(Permissions::empty()),
-                        interaction.member.as_ref().and_then(|m| m.permissions).unwrap_or(Permissions::empty()),
-                    );
-                    check!(app_permissions.contains(Permissions::BAN_MEMBERS), "I need the **Ban Members** permission to function.");
-                    check!(member_permissions.contains(Permissions::BAN_MEMBERS), "You need the **Ban Members** permission to use this command.");
+                    let app_permissions = interaction.app_permissions.unwrap_or(Permissions::empty());
+                    let member_permissions = interaction.member.as_ref().and_then(|m| m.permissions).unwrap_or(Permissions::empty());
+
+                    if !app_permissions.contains(Permissions::BAN_MEMBERS) {
+                        errors.push("I need the **Ban Members** permission to function.".into());
+                    }
+                    if !member_permissions.contains(Permissions::BAN_MEMBERS) {
+                        errors.push("You need the **Ban Members** permission to use this command.".into());
+                    }
 
                     if let Some(resolved_honeypot) = resolved_channels.get(&channel_id) {
-                        check!(resolved_honeypot.permissions.contains(Permissions::VIEW_CHANNEL), format!("You need **View Channel** permission in <#{channel_id}>."));
-                        check!(resolved_honeypot.app_permissions.unwrap_or(Permissions::empty()).contains(Permissions::VIEW_CHANNEL), format!("I need the **View Channel** permission in <#{channel_id}>."));
+                        if !resolved_honeypot.permissions.contains(Permissions::VIEW_CHANNEL) {
+                            errors.push(format!("You need **View Channel** permission in <#{channel_id}>."));
+                        }
+                        if !resolved_honeypot.app_permissions.unwrap_or(Permissions::empty()).contains(Permissions::VIEW_CHANNEL) {
+                            errors.push(format!("I need the **View Channel** permission in <#{channel_id}>."));
+                        }
                     } else {
                         errors.push(format!("Could not resolve channel <#{channel_id}> (honeypot channel)."));
                     }
 
                     if let Some(log_id) = log_channel_id {
                         if let Some(resolved_log) = resolved_channels.get(&log_id) {
-                            check!(resolved_log.permissions.contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES), format!("You need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
-                            check!(resolved_log.app_permissions.unwrap_or(Permissions::empty()).contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES), format!("I need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
+                            if !resolved_log.permissions.contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES) {
+                                errors.push(format!("You need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
+                            }
+                            if !resolved_log.app_permissions.unwrap_or(Permissions::empty()).contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES) {
+                                errors.push(format!("I need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
+                            }
                         }
                     }
 
