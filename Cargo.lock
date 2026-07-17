@@ -1251,8 +1251,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "twilight-gateway"
 version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59267541c31f888c1587da5e7cbab182ae6efd98faedd9ea2e35a4eef43ff204"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "bitflags",
  "fastrand",
@@ -1272,8 +1271,7 @@ dependencies = [
 [[package]]
 name = "twilight-gateway-queue"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "366a73fe47f61a3d522c3aaf70475e60634b0ae59e7b94272ed7496fffa7ceb7"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "tokio",
  "tracing",
@@ -1282,7 +1280,7 @@ dependencies = [
 [[package]]
 name = "twilight-http"
 version = "0.17.1"
-source = "git+https://github.com/The-Fiery-Fire/twilight?branch=The-Fiery-Fire-riskymh%2Finteraction-resolved-channel-app_permissions#9145599eca07b468dab35a899e5312606b174bce"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "brotli-decompressor",
  "fastrand",
@@ -1305,7 +1303,7 @@ dependencies = [
 [[package]]
 name = "twilight-http-ratelimiting"
 version = "0.17.1"
-source = "git+https://github.com/The-Fiery-Fire/twilight?branch=The-Fiery-Fire-riskymh%2Finteraction-resolved-channel-app_permissions#9145599eca07b468dab35a899e5312606b174bce"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "hashbrown 0.16.1",
  "tokio",
@@ -1316,7 +1314,7 @@ dependencies = [
 [[package]]
 name = "twilight-model"
 version = "0.17.1"
-source = "git+https://github.com/The-Fiery-Fire/twilight?branch=The-Fiery-Fire-riskymh%2Finteraction-resolved-channel-app_permissions#9145599eca07b468dab35a899e5312606b174bce"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "bitflags",
  "serde",
@@ -1328,7 +1326,7 @@ dependencies = [
 [[package]]
 name = "twilight-util"
 version = "0.17.0"
-source = "git+https://github.com/The-Fiery-Fire/twilight?branch=The-Fiery-Fire-riskymh%2Finteraction-resolved-channel-app_permissions#9145599eca07b468dab35a899e5312606b174bce"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "twilight-model",
  "twilight-validate",
@@ -1337,7 +1335,7 @@ dependencies = [
 [[package]]
 name = "twilight-validate"
 version = "0.17.0"
-source = "git+https://github.com/The-Fiery-Fire/twilight?branch=The-Fiery-Fire-riskymh%2Finteraction-resolved-channel-app_permissions#9145599eca07b468dab35a899e5312606b174bce"
+source = "git+https://github.com/twilight-rs/twilight#3c4262e9922e2c35a836fa9ec6595f117b47f423"
 dependencies = [
  "twilight-model",
 ]
