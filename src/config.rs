@@ -63,10 +63,7 @@ pub fn load_guild_config(file: &str) -> GuildConfigMap {
                     let log_channel: Option<u64> = if parts[2].is_empty() {
                         None
                     } else {
-                        match parts[2].parse::<u64>() {
-                            Ok(id) => Some(id),
-                            Err(_) => None,
-                        }
+                        parts[2].parse::<u64>().ok()
                     };
                     let action_type = match parts[3].parse::<ActionType>() {
                         Ok(action_type) => action_type,

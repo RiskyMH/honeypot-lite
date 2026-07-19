@@ -92,8 +92,8 @@ pub async fn event_handler(event: Event, _state: ()) {
                         errors.push(format!("Could not resolve channel <#{channel_id}> (honeypot channel)."));
                     }
 
-                    if let Some(log_id) = log_channel_id {
-                        if let Some(resolved_log) = resolved_channels.get(&log_id) {
+                    if let Some(log_id) = log_channel_id
+                        && let Some(resolved_log) = resolved_channels.get(&log_id) {
                             if !resolved_log.permissions.contains(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES) {
                                 errors.push(format!("You need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
                             }
@@ -101,7 +101,6 @@ pub async fn event_handler(event: Event, _state: ()) {
                                 errors.push(format!("I need **View Channel** and **Send Messages** in <#{log_id}> (log channel)."));
                             }
                         }
-                    }
 
                     if !errors.is_empty() {
                         let _ = CTX.interaction().create_response(interaction.id, &interaction.token, &InteractionResponse {
@@ -141,7 +140,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                 } else {
                     Some(format!(
                         "Honeypot configuration updated: Will **{}** anyone who types in <#{}> {}.",
-                        action_type.to_string(),
+                        action_type,
                         channel_id,
                         if let Some(log_channel_id) = log_channel_id {
                             format!("and log actions to <#{}>", log_channel_id)
@@ -328,6 +327,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                         twilight_http_error_string(&error)
                     );
                 }
+                return;
             }
         }
         Event::Ready(ready) => {
@@ -345,7 +345,7 @@ pub async fn event_handler(event: Event, _state: ()) {
 }
 
 pub fn global_commands() -> Vec<Command> {
-    return vec![
+    vec![
         CommandBuilder::new(
             "honeypot-set",
             "Set/update honeypot channel (note: this overrides previous config set)",
@@ -386,7 +386,7 @@ pub fn global_commands() -> Vec<Command> {
             ]),
         )
         .build(),
-    ];
+    ]
 }
 
 fn twilight_http_error_string(error: &twilight_http::Error) -> String {
