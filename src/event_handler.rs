@@ -115,7 +115,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                     }
                 };
 
-                let guild_config_to_save = {
+                {
                     let mut guild_config = CTX.guild_config.write().await;
                     if action_type == ActionType::Disabled {
                         guild_config.remove(&guild_id);
@@ -129,9 +129,9 @@ pub async fn event_handler(event: Event, _state: ()) {
                             },
                         );
                     }
-                    guild_config.clone()
+                    save_guild_config(&CTX.guild_config_file_path, &guild_config.downgrade())
+                        .unwrap();
                 };
-                save_guild_config(&CTX.guild_config_file_path, &guild_config_to_save).unwrap();
 
                 let response_content = if action_type == ActionType::Disabled {
                     Some(
@@ -165,27 +165,23 @@ pub async fn event_handler(event: Event, _state: ()) {
             }
         }
         Event::ChannelDelete(channel) => {
-            let guild_config_to_save = {
-                let mut guild_config = CTX.guild_config.write().await;
-                let guild_ids_to_remove: Vec<_> = guild_config
-                    .iter()
-                    .filter(|(_, config)| config.honeypot_channel == channel.id)
-                    .map(|(guild_id, _)| *guild_id)
-                    .collect();
-                for guild_id in guild_ids_to_remove {
-                    guild_config.remove(&guild_id);
+            let mut guild_config = CTX.guild_config.write().await;
+            guild_config.retain(|_guild_id, config| {
+                if config.honeypot_channel == channel.id {
+                    false
+                } else {
+                    if config.log_channel == Some(channel.id.into()) {
+                        config.log_channel = None;
+                    }
+                    true
                 }
-                guild_config.clone()
-            };
-            save_guild_config(&CTX.guild_config_file_path, &guild_config_to_save).unwrap();
+            });
+            save_guild_config(&CTX.guild_config_file_path, &guild_config.downgrade()).unwrap();
         }
         Event::GuildDelete(guild) => {
-            let guild_config_to_save = {
-                let mut guild_config = CTX.guild_config.write().await;
-                guild_config.remove(&guild.id.into());
-                guild_config.clone()
-            };
-            save_guild_config(&CTX.guild_config_file_path, &guild_config_to_save).unwrap();
+            let mut guild_config = CTX.guild_config.write().await;
+            guild_config.remove(&guild.id.into());
+            save_guild_config(&CTX.guild_config_file_path, &guild_config.downgrade()).unwrap();
         }
         Event::MessageCreate(message) => {
             // bot messages dont matter, except for interactions from *other* bots where we count the invoker as msg author
@@ -197,22 +193,16 @@ pub async fn event_handler(event: Event, _state: ()) {
             }
 
             // check if msg is in a honeypot channel
-            let guild_id = if let Some(guild_id) = message.guild_id {
-                guild_id
-            } else {
+            let Some(guild_id) = message.guild_id else {
                 return;
             };
-
             let channel_id = message.channel_id;
 
             let config = {
                 let guild_config = CTX.guild_config.read().await;
                 guild_config.get(&guild_id.into()).cloned()
             };
-
-            let config = if let Some(config) = config {
-                config
-            } else {
+            let Some(config) = config else {
                 return;
             };
 
@@ -283,11 +273,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                     ActionType::Disabled => "do nothing to",
                 };
 
-                let channel_id = if let Some(log_channel) = config.log_channel {
-                    Id::new(log_channel)
-                } else {
-                    message.channel_id
-                };
+                let channel_id = config.log_channel.map_or(message.channel_id, Id::new);
 
                 let res = CTX.http.create_message(channel_id)
                     .content(&format!(

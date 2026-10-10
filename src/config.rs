@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionType {
@@ -17,7 +17,7 @@ impl fmt::Display for ActionType {
             ActionType::Softban => "softban",
             ActionType::Disabled => "disabled",
         };
-        write!(f, "{}", s)
+        f.write_str(s)
     }
 }
 
@@ -40,7 +40,7 @@ pub struct GuildConfigBody {
     pub log_channel: Option<u64>,
     pub action_type: ActionType,
 }
-pub type GuildConfigMap = HashMap<u64, GuildConfigBody>;
+pub type GuildConfigMap = FxHashMap<u64, GuildConfigBody>;
 
 // save via csv:
 // guild_id,honeypot_channel_id,log_channel_id,action_type
@@ -48,7 +48,7 @@ pub type GuildConfigMap = HashMap<u64, GuildConfigBody>;
 // 1234567890123456789,234567890123456789,,softban
 
 pub fn load_guild_config(file: &str) -> GuildConfigMap {
-    let mut guild_config = GuildConfigMap::new();
+    let mut guild_config = GuildConfigMap::default();
 
     if let Ok(contents) = std::fs::read_to_string(file) {
         for line in contents.lines() {
