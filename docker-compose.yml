@@ -4,6 +4,7 @@ services:
      build: .
      restart: unless-stopped
      init: true
+     stop_grace_period: 10s
      environment:
        CONFIG_FILE_PATH: ${CONFIG_FILE_PATH:-/data/guild_config.csv}
        RESUME_FILE_PATH: ${RESUME_FILE_PATH:-/data/resume-info.json}

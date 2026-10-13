@@ -247,10 +247,7 @@ pub async fn event_handler(event: Event, _state: ()) {
                         );
                         failed = true;
                     } else {
-                        let res: Result<
-                            twilight_http::Response<twilight_http::response::marker::EmptyBody>,
-                            twilight_http::Error,
-                        > = CTX
+                        let res = CTX
                             .http
                             .delete_ban(guild_id, user_id)
                             .reason("User typed in #honeypot channel -> softban (2/2)")

@@ -14,7 +14,7 @@ pub use self::{
 
 use dashmap::DashMap;
 use std::{env, time::Duration};
-use tokio::{sync::RwLock};
+use tokio::sync::RwLock;
 use twilight_gateway::{ConfigBuilder, EventTypeFlags, Intents, queue::InMemoryQueue};
 use twilight_http::Client;
 
@@ -97,14 +97,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(windows)]
-async fn shutdown_signal() {
+pub async fn shutdown_signal() {
     tokio::signal::ctrl_c()
         .await
         .expect("failed to install CTRL+C signal handler");
 }
 
 #[cfg(unix)]
-async fn shutdown_signal() {
+pub async fn shutdown_signal() {
     use tokio::signal::unix::{SignalKind, signal};
     let mut sigint = signal(SignalKind::interrupt()).expect("failed to install SIGINT handler");
     let mut sigterm = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");

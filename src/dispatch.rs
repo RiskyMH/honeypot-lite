@@ -1,6 +1,6 @@
-use crate::{CTX, ConfigBuilderExt as _, EVENT_TYPES, ResumeInfo};
+use crate::{CTX, ConfigBuilderExt as _, EVENT_TYPES, ResumeInfo, shutdown_signal};
 use std::{error::Error, pin::pin};
-use tokio::{signal, sync::watch};
+use tokio::{sync::watch};
 use tokio_util::task::TaskTracker;
 use twilight_gateway::{CloseFrame, ConfigBuilder, Event, Shard, ShardId, StreamExt as _};
 
@@ -95,7 +95,7 @@ pub async fn run<Fut: Future<Output = ()> + Send + 'static, S>(
     mut state_provider: impl FnMut(&mut Shard) -> S,
 ) -> ResumeInfo {
     let mut receiver = ShardHandle::insert(shard.id());
-    let mut shutdown = pin!(signal::ctrl_c());
+    let mut shutdown = pin!(shutdown_signal());
     let tracker = TaskTracker::new();
 
     loop {
